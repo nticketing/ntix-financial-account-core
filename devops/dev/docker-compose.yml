@@ -1,0 +1,24 @@
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2019-CU23-ubuntu-20.04
+    container_name: sqlserver-dev
+    environment:
+      ACCEPT_EULA: "Y"
+      SA_PASSWORD: "SuaSenhaForte@123"
+      MSSQL_PID: "Developer"
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    command:
+      - /bin/bash
+      - -c
+      - |
+        /opt/mssql/bin/sqlservr &
+        sleep 20
+        /opt/mssql-tools/bin/sqlcmd -U sa -P SuaSenhaForte@123 -l 30 -e -i /data/SQL_NTIX_FINANCIAL_ACCOUNT.sql
+        sleep infinity
+    restart: unless-stopped
+
+volumes:
+  sqlserver_data:
