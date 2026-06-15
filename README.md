@@ -1,1 +1,1 @@
-# ntix-core-customers-balance
+# ntix-financial-account-core
