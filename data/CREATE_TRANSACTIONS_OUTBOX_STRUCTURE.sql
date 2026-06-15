@@ -9,10 +9,14 @@ BEGIN
 		Amount DECIMAL(18, 2) NOT NULL, -- Valor da Operação
 		Type VARCHAR(10) NOT NULL, -- Tipo da Operação (Crédito/Débito)
 		OccurredAt DATETIME2(7) NOT NULL, -- Horário da Ocorrência da Operação
-		Status VARCHAR(10) NOT NULL, -- Status do Outbox PENDING, RUNNING
+		Status VARCHAR(10) NOT NULL, -- Status do Outbox PENDING, RUNNING, FAILED
 		CreatedAt DATETIME2(7) NOT NULL CONSTRAINT DF_Outbox_PersistedAt DEFAULT SYSUTCDATETIME(), -- Horário de Persistência para Consumo do Processamento,
 		LastModifiedAt DATETIME2(7) NOT NULL CONSTRAINT DF_Transactions_Outbox_LastModifiedAt DEFAULT SYSUTCDATETIME(),
-		ProcessedAt DATETIME2(7)
+		ProcessedAt DATETIME2(7) NULL, -- Horário de Processamento do Envio do Evento  
+		TimeoutSeconds INT DEFAULT 5, -- Tempo de Timeout para Processamento da Outbox
+		LastAttemptAt DATETIME2(7) NULL, -- Horário da Última Tentativa
+		LockedUntilAt DATETIME2(7) NULL,
+		RetryCount INT DEFAULT 0 -- Contador de Retentativas
 	);
 END;
 
@@ -54,11 +58,12 @@ BEGIN
 			o.Status,
 			o.CreatedAt,
 			o.LastModifiedAt,
-			o.ProcessedAt
+			o.ProcessedAt,
+			o.RetryCount
 		FROM financial_truth.transactions_outbox o WITH (INDEX(IX_Transactions_Outbox_Oldest_Pending), UPDLOCK, READPAST, ROWLOCK)
 		WHERE o.Status = 'PENDING' AND NOT EXISTS (SELECT 1 FROM financial_truth.transactions_outbox r WITH(INDEX(UK_Transactions_Outbox_One_Running_By_Client)) WHERE r.ClientId = o.ClientId AND r.Status = 'RUNNING')
 		ORDER BY o.CreatedAt ASC, o.Id ASC
-	) UPDATE NextOutbox SET Status = 'RUNNING', LastModifiedAt = SYSUTCDATETIME()
+	) UPDATE NextOutbox SET Status = 'RUNNING', LastModifiedAt = SYSUTCDATETIME(), RetryCount = o.RetryCount + 1, LastAttemptAt = SYSUTCDATETIME()
 	OUTPUT
 		inserted.Id,
 		inserted.CorrelationId,
@@ -69,5 +74,32 @@ BEGIN
 		inserted.[Type],
 		inserted.OccurredAt,
 		inserted.Status;
+	COMMIT TRANSACTION;
+END;
+
+CREATE OR ALTER PROCEDURE financial_truth.sp_dequeue_processing_transaction_outbox
+AS 
+BEGIN
+	SET NOCOUNT ON;
+	SET XACT_ABORT ON;
+
+	BEGIN TRANSACTION;
+		
+		SELECT TOP(1)
+			o.Id,
+			o.CorrelationId,
+			o.TransactionId,
+			o.OperationId,
+			o.ClientId,
+			o.Amount,
+			o.[Type],
+			o.OccurredAt,
+			o.Status,
+			o.CreatedAt,
+			o.LastModifiedAt,
+			o.ProcessedAt
+		FROM financial_truth.transactions_outbox o WITH (INDEX(IX_Transactions_Outbox_Oldest_Pending), UPDLOCK, READPAST, ROWLOCK)
+		WHERE o.Status = 'PENDING'
+
 	COMMIT TRANSACTION;
 END;
