@@ -63,7 +63,7 @@ BEGIN
 		FROM financial_truth.transactions_outbox o WITH (INDEX(IX_Transactions_Outbox_Oldest_Pending), UPDLOCK, READPAST, ROWLOCK)
 		WHERE o.Status = 'PENDING' AND NOT EXISTS (SELECT 1 FROM financial_truth.transactions_outbox r WITH(INDEX(UK_Transactions_Outbox_One_Running_By_Client)) WHERE r.ClientId = o.ClientId AND r.Status = 'RUNNING')
 		ORDER BY o.CreatedAt ASC, o.Id ASC
-	) UPDATE NextOutbox SET Status = 'RUNNING', LastModifiedAt = SYSUTCDATETIME(), RetryCount = o.RetryCount + 1, LastAttemptAt = SYSUTCDATETIME()
+	) UPDATE NextOutbox SET Status = 'RUNNING', LastModifiedAt = SYSUTCDATETIME(), RetryCount = o.RetryCount + 1, LastAttemptAt = SYSUTCDATETIME(), LockedUntilAt = DATEADD(SECOND, o.TimeoutSeconds, SYSUTCDATETIME())
 	OUTPUT
 		inserted.Id,
 		inserted.CorrelationId,
@@ -77,29 +77,27 @@ BEGIN
 	COMMIT TRANSACTION;
 END;
 
-CREATE OR ALTER PROCEDURE financial_truth.sp_dequeue_processing_transaction_outbox
+CREATE OR ALTER PROCEDURE financial_truth.sp_job_transaction_outbox_timeout
+	@MaxRetries INT = 3
 AS 
-BEGIN
+BEGIN 
 	SET NOCOUNT ON;
 	SET XACT_ABORT ON;
 
 	BEGIN TRANSACTION;
-		
-		SELECT TOP(1)
-			o.Id,
-			o.CorrelationId,
-			o.TransactionId,
-			o.OperationId,
-			o.ClientId,
-			o.Amount,
-			o.[Type],
-			o.OccurredAt,
-			o.Status,
-			o.CreatedAt,
-			o.LastModifiedAt,
-			o.ProcessedAt
-		FROM financial_truth.transactions_outbox o WITH (INDEX(IX_Transactions_Outbox_Oldest_Pending), UPDLOCK, READPAST, ROWLOCK)
-		WHERE o.Status = 'PENDING'
+		UPDATE o
+			SET
+				o.Status = 'FAILED',
+				o.LastModifiedAt = SYSUTCDATETIME()
+			FROM financial_truth.transactions_outbox o WITH (UPDLOCK, READPAST, ROWLOCK)
+			WHERE o.Status = 'RUNNING' AND o.LockedUntilAt <= SYSUTCDATETIME() AND o.RetryCount >= @MaxRetries;
 
+		UPDATE o
+			SET
+				o.Status = 'PENDING',
+				o.LastModifiedAt = SYSUTCDATETIME(),
+				o.LockedUntilAt = DATEADD(SECOND, o.TimeoutSeconds, SYSUTCDATETIME())
+			FROM financial_truth.transactions_outbox o WITH (UPDLOCK, READPAST, ROWLOCK)
+			WHERE o.Status = 'RUNNING' AND o.LockedUntilAt <= SYSUTCDATETIME() AND o.RetryCount < @MaxRetries;
 	COMMIT TRANSACTION;
 END;
