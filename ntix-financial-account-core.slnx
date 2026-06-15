@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/data/">
+    <File Path="data/CREATE_TRANSACTIONS_OUTBOX_STRUCTURE.sql" />
     <File Path="data/SQL_NTIX_FINANCIAL_ACCOUNT.sql" />
   </Folder>
   <Folder Name="/devops/" />
@@ -11,7 +12,11 @@
   </Folder>
   <Folder Name="/specs/" />
   <Folder Name="/src/">
+    <Project Path="src/Application/Application.csproj" Id="ff4aaf95-63fa-4e5f-8d3c-7b7f344f6b0a" />
     <Project Path="src/Domain/Domain.csproj" Id="a6fa3cce-0e46-46ad-8ab2-1a9662f40854" />
+    <Project Path="src/Infrastructure/Infrastructure.csproj" Id="696034aa-f30f-4d3e-a795-0573c3416f28" />
+    <Project Path="src/WebApi/WebApi.csproj" Id="0974dc6b-f28f-4316-b8b6-9e01725259f1" />
+    <Project Path="src/Worker/Worker.csproj" Id="c6094635-176e-4a12-881f-3aaba9c0ad0b" />
   </Folder>
   <Folder Name="/tsts/" />
 </Solution>

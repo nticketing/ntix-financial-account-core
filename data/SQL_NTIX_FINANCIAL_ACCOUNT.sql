@@ -64,18 +64,29 @@ IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'transactions' AND schema_i
 BEGIN   
 	CREATE TABLE financial_truth.transactions (
 	Id BIGINT IDENTITY(1,1) NOT NULL,    
-	CorrelationId UNIQUEIDENTIFIER NOT NULL,    
-	TransactionId UNIQUEIDENTIFIER NOT NULL,    
-	OperationId UNIQUEIDENTIFIER NOT NULL,    
-	ClientId UNIQUEIDENTIFIER NOT NULL,    
-	Amount DECIMAL(18, 2) NOT NULL,    
-	Type VARCHAR(10) NOT NULL,    
-	OccurredAt DATETIME2(7) NOT NULL,    
-	PersistedAt DATETIME2(7) NOT NULL CONSTRAINT DF_PersistedAt DEFAULT SYSUTCDATETIME(),    
-	YearMonth AS (DATEPART(year, OccurredAt) * 100 + DATEPART(month, OccurredAt)) PERSISTED     
+	CorrelationId UNIQUEIDENTIFIER NOT NULL, -- ID de Correlacionamento com a Operação do Produto
+	TransactionId UNIQUEIDENTIFIER NOT NULL, -- ID de Lançamento Transacional
+	OperationId UNIQUEIDENTIFIER NOT NULL, -- ID Identificador da Operação de Lançamento  
+	ClientId UNIQUEIDENTIFIER NOT NULL, -- ID Identificador da Conta Relacionada
+	Amount DECIMAL(18, 2) NOT NULL, -- Valor da Operação
+	Type VARCHAR(10) NOT NULL, -- Tipo da Operação (Crédito/Débito)
+	OccurredAt DATETIME2(7) NOT NULL, -- Horário da Ocorrência da Operação
+	PersistedAt DATETIME2(7) NOT NULL CONSTRAINT DF_PersistedAt DEFAULT SYSUTCDATETIME(), -- Horário de Persistência da Operação
+	YearMonth AS (DATEPART(year, OccurredAt) * 100 + DATEPART(month, OccurredAt)) PERSISTED -- Particionamento do Banco de Dados para Melhoria de Consultas
 	CONSTRAINT PK_TransactionId PRIMARY KEY NONCLUSTERED (Id) ON [PRIMARY])   
 	ON PS_Transaction_YearMonth (YearMonth);  
 END;  
+
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'balances' AND schema_id = SCHEMA_ID('financial_truth'))
+BEGIN
+	CREATE TABLE financial_truth.balances (
+		Id BIGINT IDENTITY(1,1) NOT NULL,
+		ClientId UNIQUEIDENTIFIER NOT NULL,
+		Balance DECIMAL(18, 2) NOT NULL,
+		CreatedAt DATETIME2(7) NOT NULL CONSTRAINT DF_PersistedAt DEFAULT SYSUTCDATETIME(), 
+		LastModifiedAt DATETIME2(2) NOT NULL,
+	);
+END;
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'CX_Transactions_YearMonth_Id' AND object_id = OBJECT_ID('financial_truth.transactions'))
 BEGIN
