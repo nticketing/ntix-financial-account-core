@@ -47,7 +47,7 @@ public sealed class OutboxTransactionEntryWorker : BackgroundService
 
     private async Task<bool> ProcessNextAsync(CancellationToken cancellationToken)
     {
-        await using var scope = _serviceProvider.CreateAsyncScope();
+        using var scope = _serviceProvider.CreateScope();
         var dequeueQuery = scope.ServiceProvider.GetRequiredService<IDequeueOutboxTransactionEntryQuery>();
 
         var entry = await dequeueQuery.ExecuteAsync(cancellationToken);

@@ -18,7 +18,7 @@ public sealed class DequeueOutboxTransactionEntryQuery : IDequeueOutboxTransacti
         var connection = await _connectionManager.TryConnectAsync(cancellationToken);
 
         // Columns: Id(0) CorrelationId(1) TransactionId(2) OperationId(3) ClientId(4) Amount(5) Type(6) OccurredAt(7) Status(8)
-        using var command = new SqlCommand("EXEC financial_truth.sp_dequeue_transaction_outbox", connection);
+        using var command = new SqlCommand("EXEC [financial_truth].[sp_dequeue_transaction_outbox]", connection);
         using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
         if (!await reader.ReadAsync(cancellationToken))

@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\otavi\\\\OneDrive\\\\Desktop\\\\ntix-financial-account-core\" -Directory)",
+      "Bash(Select-Object Name)",
+      "Bash(xargs grep -l \"\")"
+    ]
+  }
+}

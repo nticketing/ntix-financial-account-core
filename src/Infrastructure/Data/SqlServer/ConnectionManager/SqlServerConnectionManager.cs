@@ -23,11 +23,14 @@ public sealed class SqlServerConnectionManager : ISqlServerConnectionManager
     public async Task<SqlConnection> TryConnectAsync(CancellationToken cancellationToken = default)
     {
         if (_connection != null)
+        {
+            await _connection.OpenAsync(cancellationToken);
             return _connection;
+        }
 
         await _connectionLock.WaitAsync(cancellationToken);
 
-        using var sqlConnection = new SqlConnection(_configuration.ConnectionString);
+        var sqlConnection = new SqlConnection(_configuration.ConnectionString);
 
         try
         {
