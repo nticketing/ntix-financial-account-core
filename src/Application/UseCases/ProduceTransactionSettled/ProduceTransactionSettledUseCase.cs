@@ -2,6 +2,7 @@
 using Application.UseCases.Interfaces;
 using Application.UseCases.ProduceTransactionSettled.Models;
 using Confluent.Kafka;
+using Infrastructure.Data.SqlServer.OutboxTransactionEntry.Interfaces;
 using Microsoft.Extensions.Logging;
 
 namespace Application.UseCases.ProduceTransactionSettled;
@@ -10,13 +11,16 @@ public sealed class ProduceTransactionSettledUseCase : IUseCase<ProduceTransacti
 {
     private readonly ILogger<ProduceTransactionSettledUseCase> _logger;
     private readonly IProducer<string, TransactionSettledEventMessage> _producer;
+    private readonly IDequeueOutboxTransactionEntryRepository _repository;
 
     public ProduceTransactionSettledUseCase(
         ILogger<ProduceTransactionSettledUseCase> logger, 
-        IProducer<string, TransactionSettledEventMessage> producer)
+        IProducer<string, TransactionSettledEventMessage> producer,
+        IDequeueOutboxTransactionEntryRepository repository)
     {
         _logger = logger;
         _producer = producer;
+        _repository = repository;
     }
 
     private const string TOPIC_NAME = "financialaccount.core.transaction-settled";
@@ -55,5 +59,7 @@ public sealed class ProduceTransactionSettledUseCase : IUseCase<ProduceTransacti
                 input.OccurredAt,
                 Topic = TOPIC_NAME
             });
+
+        await _repository.UpdateOutboxTransactionEntryToProcessedAsync(input.OutboxTransactionEntryId, cancellationToken);
     }
 }

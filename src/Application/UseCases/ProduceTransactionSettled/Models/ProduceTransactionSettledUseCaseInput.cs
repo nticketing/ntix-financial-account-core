@@ -2,4 +2,4 @@
 
 namespace Application.UseCases.ProduceTransactionSettled.Models;
 
-public sealed record ProduceTransactionSettledUseCaseInput(Guid CorrelationId, Guid TransactionId, Guid ClientId, Guid OperationId, TransactionType TransactionType, decimal Amount, DateTimeOffset OccurredAt, DateTimeOffset CreatedAt);
+public sealed record ProduceTransactionSettledUseCaseInput(long OutboxTransactionEntryId, Guid CorrelationId, Guid TransactionId, Guid ClientId, Guid OperationId, TransactionType TransactionType, decimal Amount, DateTimeOffset OccurredAt, DateTimeOffset CreatedAt);

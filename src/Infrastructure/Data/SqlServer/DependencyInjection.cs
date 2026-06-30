@@ -14,7 +14,7 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddSqlServerManagedConnectionConfiguration(this IServiceCollection services, IConfiguration configuration)
     {
-        services.TryAddScoped<ISqlServerConnectionManager, SqlServerConnectionManager>();
+        services.TryAddTransient<ISqlServerConnectionManager, SqlServerConnectionManager>();
 
         return services;
     }

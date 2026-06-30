@@ -4,5 +4,6 @@ namespace Infrastructure.Data.SqlServer.OutboxTransactionEntry.Interfaces;
 
 public interface IDequeueOutboxTransactionEntryRepository
 {
-    Task<OutboxTransactionEntryDequeued?> ExecuteAsync(CancellationToken cancellationToken = default);
+    Task<IEnumerable<OutboxTransactionEntryDequeued>?> ExecuteAsync(int batchSize = 100, CancellationToken cancellationToken = default);
+    Task UpdateOutboxTransactionEntryToProcessedAsync(long entryId, CancellationToken cancellationToken = default);
 }

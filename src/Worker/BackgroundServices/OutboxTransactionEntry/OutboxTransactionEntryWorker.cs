@@ -56,40 +56,45 @@ public sealed class OutboxTransactionEntryWorker : BackgroundService
 
         var dequeueQuery = scope.ServiceProvider.GetRequiredService<IDequeueOutboxTransactionEntryRepository>();
 
-        var entry = await dequeueQuery.ExecuteAsync(cancellationToken);
-        if (entry is null)
+        var entries = await dequeueQuery.ExecuteAsync(batchSize: 1000, cancellationToken: cancellationToken);
+        if (entries is null)
             return false;
 
         var dequeueAt = DateTimeOffset.UtcNow;
 
-        _logger.LogInformation(
-            "[{Type}] Dequeued. Input = {@Input}",
-            nameof(OutboxTransactionEntryWorker),
-            new 
-            { 
-                entry.Id, 
-                entry.CorrelationId,
-                entry.TransactionId,
-                entry.ClientId, 
-                entry.OperationId,
-                entry.Type,
-                entry.OccurredAt,
-                ElapsedTransactionToDequeueMs = (dequeueAt - entry.OccurredAt).TotalMilliseconds
-            });
+        Parallel.ForEach(entries, async (entry) =>
+        {
+            await using var scope = _serviceProvider.CreateAsyncScope();
 
-        var useCase = scope.ServiceProvider.GetRequiredService<IUseCase<ProduceTransactionSettledUseCaseInput>>();
+            var useCase = scope.ServiceProvider.GetRequiredService<IUseCase<ProduceTransactionSettledUseCaseInput>>();
 
-        var input = new ProduceTransactionSettledUseCaseInput(
-            CorrelationId: entry.CorrelationId,
-            TransactionId: entry.TransactionId,
-            ClientId: entry.ClientId,
-            OperationId: entry.OperationId,
-            TransactionType: Enum.Parse<TransactionType>(entry.Type),
-            Amount: entry.Amount,
-            OccurredAt: entry.OccurredAt,
-            CreatedAt: entry.CreatedAt);
+            _logger.LogInformation("[{Type}] Dequeued. Input = {@Input}",
+                nameof(OutboxTransactionEntryWorker),
+                new
+                {
+                    entry.Id,
+                    entry.CorrelationId,
+                    entry.TransactionId,
+                    entry.ClientId,
+                    entry.OperationId,
+                    entry.Type,
+                    entry.OccurredAt,
+                    ElapsedTransactionToDequeueMs = (dequeueAt - entry.OccurredAt).TotalMilliseconds
+                });
 
-        await useCase.ExecuteAsync(input, cancellationToken);
+            var input = new ProduceTransactionSettledUseCaseInput(
+                OutboxTransactionEntryId: entry.Id,
+                CorrelationId: entry.CorrelationId,
+                TransactionId: entry.TransactionId,
+                ClientId: entry.ClientId,
+                OperationId: entry.OperationId,
+                TransactionType: Enum.Parse<TransactionType>(entry.Type),
+                Amount: entry.Amount,
+                OccurredAt: entry.OccurredAt,
+                CreatedAt: entry.CreatedAt);
+
+            await useCase.ExecuteAsync(input, cancellationToken);
+        });
 
         return true;
     }

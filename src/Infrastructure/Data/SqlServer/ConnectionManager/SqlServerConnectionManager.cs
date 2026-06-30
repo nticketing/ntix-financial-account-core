@@ -2,6 +2,7 @@
 using Infrastructure.Data.SqlServer.ConnectionManager.Interfaces;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
+using System.Data;
 namespace Infrastructure.Data.SqlServer.ConnectionManager;
 
 public sealed class SqlServerConnectionManager : ISqlServerConnectionManager
@@ -24,7 +25,9 @@ public sealed class SqlServerConnectionManager : ISqlServerConnectionManager
     {
         if (_connection != null)
         {
-            await _connection.OpenAsync(cancellationToken);
+            if (_connection.State != ConnectionState.Open)
+                await _connection.OpenAsync(cancellationToken);
+
             return _connection;
         }
 
