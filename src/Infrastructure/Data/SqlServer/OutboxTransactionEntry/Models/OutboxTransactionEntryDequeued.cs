@@ -1,4 +1,4 @@
-namespace Infrastructure.Data.SqlServer.OutboxTransactionEntry;
+namespace Infrastructure.Data.SqlServer.OutboxTransactionEntry.Models;
 
 public sealed record OutboxTransactionEntryDequeued(
     long Id,
@@ -8,5 +8,6 @@ public sealed record OutboxTransactionEntryDequeued(
     Guid ClientId,
     decimal Amount,
     string Type,
-    DateTime OccurredAt,
-    string Status);
+    DateTimeOffset OccurredAt,
+    string Status,
+    DateTimeOffset CreatedAt);

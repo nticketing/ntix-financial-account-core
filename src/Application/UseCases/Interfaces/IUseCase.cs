@@ -1,6 +1,4 @@
-﻿using Application.UseCases.CreateTransactions.Models;
-
-namespace Application.UseCases.Interfaces;
+﻿namespace Application.UseCases.Interfaces;
 
 public interface IUseCase<TInput>
 {

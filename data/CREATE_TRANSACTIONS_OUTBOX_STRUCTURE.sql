@@ -27,7 +27,7 @@ END;
 
 IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_Transactions_Outbox_Status')
 BEGIN
-	ALTER TABLE financial_truth.transactions_outbox ADD CONSTRAINT CK_transactions_outbox_status CHECK (Status IN ('PENDING', 'RUNNING', 'PROCESSED', 'FAILED'));
+	ALTER TABLE financial_truth.transactions_outbox ADD CONSTRAINT CK_transactions_outbox_status CHECK (Status IN ('PENDING', 'RUNNING', 'PROCESSED', 'FAILED', 'EXPIRED'));
 END;
 
 -- ID Único para Trava de Concorrência

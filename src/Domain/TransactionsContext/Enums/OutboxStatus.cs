@@ -7,6 +7,9 @@ namespace Domain.TransactionsContext.Enums
     public enum OutboxStatus
     {
         PENDING = 1,
-        PUBLISHED = 2,
+        RUNNING = 2,
+        PROCESSED = 3,
+        FAILED = 4,
+        EXPIRED = 5,
     }
 }

@@ -1,4 +1,8 @@
+using Application.UseCases.Interfaces;
+using Application.UseCases.ProduceTransactionSettled.Models;
+using Domain.TransactionsContext.Enums;
 using Infrastructure.Data.SqlServer.OutboxTransactionEntry.Interfaces;
+using Worker.BackgroundServices.OutboxTransactionEntry.Configuration;
 
 namespace Worker.BackgroundServices.OutboxTransactionEntry;
 
@@ -6,16 +10,16 @@ public sealed class OutboxTransactionEntryWorker : BackgroundService
 {
     private readonly ILogger<OutboxTransactionEntryWorker> _logger;
     private readonly IServiceProvider _serviceProvider;
-    private readonly OutboxTransactionEntryWorkerOptions _options;
+    private readonly OutboxTransactionEntryWorkerConfiguration _configuration;
 
     public OutboxTransactionEntryWorker(
         ILogger<OutboxTransactionEntryWorker> logger,
         IServiceProvider serviceProvider,
-        OutboxTransactionEntryWorkerOptions options)
+        OutboxTransactionEntryWorkerConfiguration configuration)
     {
         _logger = logger;
         _serviceProvider = serviceProvider;
-        _options = options;
+        _configuration = configuration;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -29,7 +33,7 @@ public sealed class OutboxTransactionEntryWorker : BackgroundService
                 var processed = await ProcessNextAsync(stoppingToken);
                 
                 if (!processed) 
-                    await Task.Delay(_options.DelayBetweenIterationsInMilliseconds, stoppingToken);
+                    await Task.Delay(_configuration.DelayBetweenIterationsInMilliseconds, stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -38,7 +42,8 @@ public sealed class OutboxTransactionEntryWorker : BackgroundService
             catch (Exception ex)
             {
                 _logger.LogError(ex, "[{Type}] Unhandled exception. Retrying after delay.", nameof(OutboxTransactionEntryWorker));
-                await Task.Delay(_options.DelayBetweenIterationsInMilliseconds, stoppingToken);
+
+                await Task.Delay(_configuration.DelayBetweenIterationsInMilliseconds, stoppingToken);
             }
         }
 
@@ -47,19 +52,44 @@ public sealed class OutboxTransactionEntryWorker : BackgroundService
 
     private async Task<bool> ProcessNextAsync(CancellationToken cancellationToken)
     {
-        using var scope = _serviceProvider.CreateScope();
-        var dequeueQuery = scope.ServiceProvider.GetRequiredService<IDequeueOutboxTransactionEntryQuery>();
+        await using var scope = _serviceProvider.CreateAsyncScope();
+
+        var dequeueQuery = scope.ServiceProvider.GetRequiredService<IDequeueOutboxTransactionEntryRepository>();
 
         var entry = await dequeueQuery.ExecuteAsync(cancellationToken);
         if (entry is null)
             return false;
 
-        _logger.LogInformation(
-            "[{Type}] Dequeued. Id={Id} TransactionId={TransactionId} ClientId={ClientId} Type={Type} Amount={Amount}",
-            nameof(OutboxTransactionEntryWorker),
-            entry.Id, entry.TransactionId, entry.ClientId, entry.Type, entry.Amount);
+        var dequeueAt = DateTimeOffset.UtcNow;
 
-        // TODO: publicar evento para broker
+        _logger.LogInformation(
+            "[{Type}] Dequeued. Input = {@Input}",
+            nameof(OutboxTransactionEntryWorker),
+            new 
+            { 
+                entry.Id, 
+                entry.CorrelationId,
+                entry.TransactionId,
+                entry.ClientId, 
+                entry.OperationId,
+                entry.Type,
+                entry.OccurredAt,
+                ElapsedTransactionToDequeueMs = (dequeueAt - entry.OccurredAt).TotalMilliseconds
+            });
+
+        var useCase = scope.ServiceProvider.GetRequiredService<IUseCase<ProduceTransactionSettledUseCaseInput>>();
+
+        var input = new ProduceTransactionSettledUseCaseInput(
+            CorrelationId: entry.CorrelationId,
+            TransactionId: entry.TransactionId,
+            ClientId: entry.ClientId,
+            OperationId: entry.OperationId,
+            TransactionType: Enum.Parse<TransactionType>(entry.Type),
+            Amount: entry.Amount,
+            OccurredAt: entry.OccurredAt,
+            CreatedAt: entry.CreatedAt);
+
+        await useCase.ExecuteAsync(input, cancellationToken);
 
         return true;
     }

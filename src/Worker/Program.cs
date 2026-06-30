@@ -1,6 +1,8 @@
+using Application.UseCases.ProduceTransactionSettled;
 using Infrastructure.Data.SqlServer;
 using Infrastructure.Data.SqlServer.Configuration;
 using Worker.BackgroundServices.OutboxTransactionEntry;
+using Worker.BackgroundServices.OutboxTransactionEntry.Configuration;
 
 namespace Worker;
 
@@ -17,11 +19,9 @@ public sealed class Program
         builder.Services.AddSqlServerManagedConnectionConfiguration(builder.Configuration);
         builder.Services.AddUnitOfWorkConfiguration(builder.Configuration);
         builder.Services.AddOutboxQueryConfiguration();
+        builder.Services.AddProduceTransactionSettledConfiguration(builder.Configuration);
 
-        var workerOptions = builder.Configuration
-            .GetSection("OutboxTransactionEntryWorker")
-            .Get<OutboxTransactionEntryWorkerOptions>()
-            ?? new OutboxTransactionEntryWorkerOptions(DelayBetweenIterationsInMilliseconds: 5000);
+        var workerOptions = builder.Configuration.GetSection("OutboxTransactionEntryWorker").Get<OutboxTransactionEntryWorkerConfiguration>()!;
         builder.Services.AddSingleton(workerOptions);
 
         builder.Services.AddHostedService<OutboxTransactionEntryWorker>();

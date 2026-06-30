@@ -28,7 +28,7 @@ public static class DependencyInjection
 
     public static IServiceCollection AddOutboxQueryConfiguration(this IServiceCollection services)
     {
-        services.TryAddScoped<IDequeueOutboxTransactionEntryQuery, DequeueOutboxTransactionEntryQuery>();
+        services.TryAddScoped<IDequeueOutboxTransactionEntryRepository, DequeueOutboxTransactionEntryRepository>();
 
         return services;
     }

@@ -1,24 +1,29 @@
 using Infrastructure.Data.SqlServer.ConnectionManager.Interfaces;
 using Infrastructure.Data.SqlServer.OutboxTransactionEntry.Interfaces;
+using Infrastructure.Data.SqlServer.OutboxTransactionEntry.Models;
 using Microsoft.Data.SqlClient;
 
 namespace Infrastructure.Data.SqlServer.OutboxTransactionEntry;
 
-public sealed class DequeueOutboxTransactionEntryQuery : IDequeueOutboxTransactionEntryQuery
+public sealed class DequeueOutboxTransactionEntryRepository : IDequeueOutboxTransactionEntryRepository
 {
     private readonly ISqlServerConnectionManager _connectionManager;
 
-    public DequeueOutboxTransactionEntryQuery(ISqlServerConnectionManager connectionManager)
+    public DequeueOutboxTransactionEntryRepository(ISqlServerConnectionManager connectionManager)
     {
         _connectionManager = connectionManager;
     }
 
     public async Task<OutboxTransactionEntryDequeued?> ExecuteAsync(CancellationToken cancellationToken = default)
     {
+        const string SQL = @"
+            EXEC [financial_truth].[sp_dequeue_transaction_outbox];
+        ";
+
         var connection = await _connectionManager.TryConnectAsync(cancellationToken);
 
-        // Columns: Id(0) CorrelationId(1) TransactionId(2) OperationId(3) ClientId(4) Amount(5) Type(6) OccurredAt(7) Status(8)
-        using var command = new SqlCommand("EXEC [financial_truth].[sp_dequeue_transaction_outbox]", connection);
+        using var command = new SqlCommand(SQL, connection);
+
         using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
         if (!await reader.ReadAsync(cancellationToken))
@@ -33,6 +38,7 @@ public sealed class DequeueOutboxTransactionEntryQuery : IDequeueOutboxTransacti
             Amount:        reader.GetDecimal(5),
             Type:          reader.GetString(6),
             OccurredAt:    reader.GetDateTime(7),
-            Status:        reader.GetString(8));
+            Status:        reader.GetString(8),
+            CreatedAt:     DateTimeOffset.UtcNow);
     }
 }
