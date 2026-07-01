@@ -101,8 +101,113 @@ BEGIN
 END;
 GO
 
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UX_Balances_ClientId' AND object_id = OBJECT_ID('financial_truth.balances'))
+BEGIN
+	CREATE UNIQUE INDEX UX_Balances_ClientId ON financial_truth.balances (ClientId);
+END;
+GO
+
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Transactions_YearMonth_Id_ClientId' AND object_id = OBJECT_ID('financial_truth.transactions'))
 BEGIN
 	CREATE INDEX IX_Transactions_YearMonth_Id_ClientId ON financial_truth.transactions (ClientId, YearMonth) INCLUDE (TransactionId, CorrelationId, OperationId, Amount, Type, PersistedAt) ON PS_Transaction_YearMonth (YearMonth);
+END;
+GO
+
+-- Procedure para Débito em Conta
+CREATE OR ALTER PROCEDURE financial_truth.sp_debit_transaction
+	@ClientId       UNIQUEIDENTIFIER,
+	@Amount         DECIMAL(18, 2),
+	@CorrelationId  UNIQUEIDENTIFIER,
+	@TransactionId  UNIQUEIDENTIFIER,   -- chave de idempotência (UX_Transactions_TransactionId)
+	@OperationId    UNIQUEIDENTIFIER,
+	@OccurredAt     DATETIME2(7) = NULL,
+	@NewBalance     DECIMAL(18, 2) = NULL OUTPUT
+AS
+BEGIN
+	SET NOCOUNT ON;
+	SET XACT_ABORT ON;
+ 
+	-- Validação de entrada: débito precisa ser um valor positivo
+	IF @Amount IS NULL OR @Amount <= 0
+		THROW 50001, 'O valor do débito deve ser maior que zero.', 1;
+ 
+	IF @OccurredAt IS NULL
+		SET @OccurredAt = SYSUTCDATETIME();
+ 
+	DECLARE @Now DATETIME2(7) = SYSUTCDATETIME();
+	DECLARE @CurrentBalance DECIMAL(18, 2);
+	DECLARE @TransactionType VARCHAR(10) = 'DEBIT';
+ 
+	BEGIN TRY
+		BEGIN TRANSACTION;
+ 
+		/* ------------------------------------------------------------------
+		   (6) PROTEÇÃO DE CONCORRÊNCIA
+		   Adquire o lock da linha de saldo da conta ANTES de qualquer leitura
+		   de decisão. UPDLOCK impede que dois débitos simultâneos do mesmo
+		   ClientId leiam o mesmo saldo e gerem duplo-gasto: o segundo fica
+		   bloqueado até o primeiro efetivar (COMMIT) e então lê o saldo já
+		   atualizado. HOLDLOCK protege contra a inexistência/inserção
+		   concorrente da linha (phantom). Como o lock de conta é sempre o
+		   primeiro recurso adquirido, a ordem de lock é consistente e não há
+		   deadlock entre operações do mesmo cliente.
+		   ------------------------------------------------------------------ */
+		SELECT @CurrentBalance = b.Balance
+		FROM financial_truth.balances b WITH (UPDLOCK, HOLDLOCK, ROWLOCK)
+		WHERE b.ClientId = @ClientId;
+ 
+		-- (1) Conta precisa existir
+		IF @CurrentBalance IS NULL
+			THROW 50002, 'Saldo não encontrado para o ClientId informado.', 1;
+ 
+		/* Idempotência: se este TransactionId já foi lançado, não repete o
+		   débito. Como estamos sob o lock da conta, esta checagem é segura
+		   contra reentrância/retentativas concorrentes. */
+		IF EXISTS (SELECT 1 FROM financial_truth.transactions WHERE TransactionId = @TransactionId)
+		BEGIN
+			SELECT @NewBalance = Balance
+			FROM financial_truth.transactions
+			WHERE TransactionId = @TransactionId;
+ 
+			COMMIT TRANSACTION;
+			RETURN 0; -- lançamento já existente: operação idempotente
+		END
+ 
+		/* (2) Regra de suficiência de saldo.
+		   Conforme especificado: saldo deve ser MAIOR que o débito (estrito).
+		   >>> Se a intenção for permitir zerar a conta, troque para: < @Amount. */
+		IF @CurrentBalance <= @Amount
+			THROW 50003, 'Saldo insuficiente para o débito solicitado.', 1;
+ 
+		-- (3) Saldo resultante que será gravado no lançamento
+		SET @NewBalance = @CurrentBalance - @Amount;
+ 
+		-- (3) Lançamento na fonte de verdade, já com o saldo pós-operação
+		INSERT INTO financial_truth.transactions
+			(CorrelationId, TransactionId, OperationId, ClientId, Amount, [Type], OccurredAt, Balance)
+		VALUES
+			(@CorrelationId, @TransactionId, @OperationId, @ClientId, @Amount, @TransactionType, @OccurredAt, @NewBalance);
+ 
+		-- (4) Atualiza o saldo materializado da conta
+		UPDATE financial_truth.balances
+			SET Balance = @NewBalance,
+			    LastModifiedAt = @Now
+		WHERE ClientId = @ClientId;
+ 
+		-- (5) Enfileira na Outbox para processamento futuro (defaults preenchem
+		--     CreatedAt, LastModifiedAt, TimeoutSeconds e RetryCount)
+		INSERT INTO financial_truth.transactions_outbox
+			(CorrelationId, TransactionId, OperationId, ClientId, Amount, [Type], OccurredAt, Status)
+		VALUES
+			(@CorrelationId, @TransactionId, @OperationId, @ClientId, @Amount, @TransactionType, @OccurredAt, 'PENDING');
+ 
+		COMMIT TRANSACTION;
+		RETURN 0; -- sucesso
+	END TRY
+	BEGIN CATCH
+		IF XACT_STATE() <> 0
+			ROLLBACK TRANSACTION;
+		THROW; -- propaga o erro (50001/50002/50003 ou erro de sistema) já com rollback
+	END CATCH
 END;
 GO
