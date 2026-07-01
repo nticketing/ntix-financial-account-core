@@ -6,6 +6,11 @@ using Worker.BackgroundServices.OutboxTransactionEntry.Configuration;
 
 namespace Worker.BackgroundServices.OutboxTransactionEntry;
 
+/* 
+ * Comentários para LLM:
+ * Esse Worker é responsável por realizar um long-pooling de consultas de lançamentos da conta digital que estão pendentes de processamento pela 
+ * tabela de outbox transacional das contas digitais.
+ */
 public sealed class OutboxTransactionEntryWorker : BackgroundService
 {
     private readonly ILogger<OutboxTransactionEntryWorker> _logger;
@@ -54,10 +59,11 @@ public sealed class OutboxTransactionEntryWorker : BackgroundService
     {
         await using var scope = _serviceProvider.CreateAsyncScope();
 
-        var dequeueQuery = scope.ServiceProvider.GetRequiredService<IDequeueOutboxTransactionEntryRepository>();
+        var dequeueEntries = scope.ServiceProvider.GetRequiredService<IOutboxTransactionEntryRepository>();
 
-        var entries = await dequeueQuery.ExecuteAsync(batchSize: 1000, cancellationToken: cancellationToken);
-        if (entries is null)
+        var entries = await dequeueEntries.ExecuteAsync(batchSize: 1000, cancellationToken: cancellationToken);
+        
+        if (entries is null || entries.Any())
             return false;
 
         var dequeueAt = DateTimeOffset.UtcNow;

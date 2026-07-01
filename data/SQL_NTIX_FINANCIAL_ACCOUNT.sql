@@ -72,6 +72,7 @@ BEGIN
 	Type VARCHAR(10) NOT NULL, -- Tipo da Operação (Crédito/Débito)
 	OccurredAt DATETIME2(7) NOT NULL, -- Horário da Ocorrência da Operação
 	PersistedAt DATETIME2(7) NOT NULL CONSTRAINT DF_PersistedAt DEFAULT SYSUTCDATETIME(), -- Horário de Persistência da Operação
+	Balance DECIMAL(18, 2) NOT NULL, -- Saldo após a operação
 	YearMonth AS (DATEPART(year, OccurredAt) * 100 + DATEPART(month, OccurredAt)) PERSISTED -- Particionamento do Banco de Dados para Melhoria de Consultas
 	CONSTRAINT PK_TransactionId PRIMARY KEY NONCLUSTERED (Id) ON [PRIMARY])   
 	ON PS_Transaction_YearMonth (YearMonth);  
@@ -102,6 +103,6 @@ GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Transactions_YearMonth_Id_ClientId' AND object_id = OBJECT_ID('financial_truth.transactions'))
 BEGIN
-	CREATE INDEX CX_Transactions_YearMonth_Id_ClientId ON financial_truth.transactions (ClientId, YearMonth) INCLUDE (TransactionId, CorrelationId, OperationId, Amount, Type, PersistedAt) ON PS_Transaction_YearMonth (YearMonth);
+	CREATE INDEX IX_Transactions_YearMonth_Id_ClientId ON financial_truth.transactions (ClientId, YearMonth) INCLUDE (TransactionId, CorrelationId, OperationId, Amount, Type, PersistedAt) ON PS_Transaction_YearMonth (YearMonth);
 END;
 GO

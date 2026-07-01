@@ -6,11 +6,11 @@ using System.Data;
 
 namespace Infrastructure.Data.SqlServer.OutboxTransactionEntry;
 
-public sealed class DequeueOutboxTransactionEntryRepository : IDequeueOutboxTransactionEntryRepository
+public sealed class OutboxTransactionEntryRepository : IOutboxTransactionEntryRepository
 {
     private readonly ISqlServerConnectionManager _connectionManager;
 
-    public DequeueOutboxTransactionEntryRepository(ISqlServerConnectionManager connectionManager)
+    public OutboxTransactionEntryRepository(ISqlServerConnectionManager connectionManager)
     {
         _connectionManager = connectionManager;
     }
@@ -34,11 +34,9 @@ public sealed class DequeueOutboxTransactionEntryRepository : IDequeueOutboxTran
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
-
-    public async Task<IEnumerable<OutboxTransactionEntryDequeued>?> ExecuteAsync(int batchSize = 100, CancellationToken cancellationToken = default)
+    public async Task<IEnumerable<OutboxTransactionEntryModel>?> ExecuteAsync(int batchSize = 100, CancellationToken cancellationToken = default)
     {
         const string procedureName = "[financial_truth].[sp_dequeue_transaction_outbox]";
-
 
         var connection = await _connectionManager.TryConnectAsync(cancellationToken);
 
@@ -54,11 +52,11 @@ public sealed class DequeueOutboxTransactionEntryRepository : IDequeueOutboxTran
         if (!await reader.ReadAsync(cancellationToken))
             return null;
 
-        var dequeuedEntries = new List<OutboxTransactionEntryDequeued>(batchSize);
+        var dequeuedEntries = new List<OutboxTransactionEntryModel>(batchSize);
 
         while (await reader.ReadAsync(cancellationToken))
         {
-            dequeuedEntries.Add(new OutboxTransactionEntryDequeued(
+            dequeuedEntries.Add(new OutboxTransactionEntryModel(
                 Id: reader.GetInt64(0),
                 CorrelationId: reader.GetGuid(1),
                 TransactionId: reader.GetGuid(2),

@@ -76,6 +76,7 @@ BEGIN
 		inserted.Status;
 	COMMIT TRANSACTION;
 END;
+GO
 
 CREATE OR ALTER PROCEDURE financial_truth.sp_job_transaction_outbox_timeout
 	@MaxRetries INT = 3

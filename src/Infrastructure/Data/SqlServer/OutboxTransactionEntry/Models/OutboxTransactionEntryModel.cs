@@ -1,6 +1,6 @@
 namespace Infrastructure.Data.SqlServer.OutboxTransactionEntry.Models;
 
-public sealed record OutboxTransactionEntryDequeued(
+public sealed record OutboxTransactionEntryModel(
     long Id,
     Guid CorrelationId,
     Guid TransactionId,

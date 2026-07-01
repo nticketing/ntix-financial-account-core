@@ -11,12 +11,12 @@ public sealed class ProduceTransactionSettledUseCase : IUseCase<ProduceTransacti
 {
     private readonly ILogger<ProduceTransactionSettledUseCase> _logger;
     private readonly IProducer<string, TransactionSettledEventMessage> _producer;
-    private readonly IDequeueOutboxTransactionEntryRepository _repository;
+    private readonly IOutboxTransactionEntryRepository _repository;
 
     public ProduceTransactionSettledUseCase(
         ILogger<ProduceTransactionSettledUseCase> logger, 
         IProducer<string, TransactionSettledEventMessage> producer,
-        IDequeueOutboxTransactionEntryRepository repository)
+        IOutboxTransactionEntryRepository repository)
     {
         _logger = logger;
         _producer = producer;
